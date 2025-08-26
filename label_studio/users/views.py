@@ -129,10 +129,17 @@ def user_login(request):
                 request.session['keep_me_logged_in'] = False
                 request.session.set_expiry(0)
 
-            # user is organization member
-            org_pk = Organization.find_by_user(user).pk
-            user.active_organization_id = org_pk
-            user.save(update_fields=['active_organization'])
+            # Try to set active organization if the user is a member of any
+            try:
+                org = Organization.find_by_user(user)
+            except Exception as exc:
+                # No memberships found or other lookup error: allow login without active org
+                logger.debug("No organization membership found during login for %s: %s", user, exc)
+                org = None
+
+            if org is not None:
+                user.active_organization_id = org.pk
+                user.save(update_fields=['active_organization'])
             return redirect(next_page)
 
     if flag_set('fflag_feat_front_lsdv_e_297_increase_oss_to_enterprise_adoption_short'):

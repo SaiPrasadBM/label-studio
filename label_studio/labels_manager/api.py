@@ -16,6 +16,7 @@ from rest_framework import views, viewsets
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 from webhooks.utils import api_webhook, api_webhook_for_delete
+from core.api_permissions import IsOrgAdmin
 
 from .functions import bulk_update_label
 from .models import Label, LabelLink
@@ -100,6 +101,12 @@ class LabelAPI(viewsets.ModelViewSet):
         PATCH=all_permissions.labels_change,
         DELETE=all_permissions.labels_delete,
     )
+
+    def get_permissions(self):
+        permissions = super().get_permissions()
+        if self.request.method in ('POST', 'PATCH', 'PUT', 'DELETE'):
+            permissions.append(IsOrgAdmin())
+        return permissions
 
     def get_serializer(self, *args, **kwargs):
         """POST request is bulk by default"""
@@ -244,6 +251,12 @@ class LabelLinkAPI(viewsets.ModelViewSet):
 )
 class LabelBulkUpdateAPI(views.APIView):
     permission_required = all_permissions.labels_change
+
+    def get_permissions(self):
+        permissions = super().get_permissions()
+        if self.request.method == 'POST':
+            permissions.append(IsOrgAdmin())
+        return permissions
 
     def post(self, request):
         serializer = LabelBulkUpdateSerializer(data=request.data)

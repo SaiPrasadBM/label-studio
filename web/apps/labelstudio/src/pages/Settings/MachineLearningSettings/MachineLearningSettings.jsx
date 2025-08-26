@@ -12,6 +12,7 @@ import { CustomBackendForm } from "./Forms";
 import { TestRequest } from "./TestRequest";
 import { StartModelTraining } from "./StartModelTraining";
 import "./MachineLearningSettings.scss";
+import { RequireRole } from "../../../components/Auth/RequireRole";
 
 export const MachineLearningSettings = () => {
   const api = useAPI();
@@ -94,7 +95,8 @@ export const MachineLearningSettings = () => {
   }, [project.id]);
 
   return (
-    <section>
+    <RequireRole fineRole="EDITOR">
+      <section>
       <div className="w-[40rem]">
         <Typography variant="headline" size="medium" className="mb-base">
           Model
@@ -189,6 +191,7 @@ export const MachineLearningSettings = () => {
         </Form>
       </div>
     </section>
+    </RequireRole>
   );
 };
 

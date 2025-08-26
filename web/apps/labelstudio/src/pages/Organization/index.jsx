@@ -1,6 +1,7 @@
 import { SidebarMenu } from "../../components/SidebarMenu/SidebarMenu";
 import { PeoplePage } from "./PeoplePage/PeoplePage";
 import { WebhookPage } from "../WebhookPage/WebhookPage";
+import { RequireRole } from "../../components/Auth/RequireRole";
 
 const ALLOW_ORGANIZATION_WEBHOOKS = window.APP_SETTINGS.flags?.allow_organization_webhooks;
 
@@ -10,7 +11,11 @@ const MenuLayout = ({ children, ...routeProps }) => {
   if (ALLOW_ORGANIZATION_WEBHOOKS) {
     menuItems.push(WebhookPage);
   }
-  return <SidebarMenu menuItems={menuItems} path={routeProps.match.url} children={children} />;
+  return (
+    <RequireRole fineRole="EDITOR">
+      <SidebarMenu menuItems={menuItems} path={routeProps.match.url} children={children} />
+    </RequireRole>
+  );
 };
 
 const organizationPages = {};

@@ -9,6 +9,7 @@ import { useProject } from "../../providers/ProjectProvider";
 import { Block, Elem } from "../../utils/bem";
 import { IconInfo } from "@humansignal/icons";
 import { useHistory } from "react-router";
+import { RequireRole } from "../../components/Auth/RequireRole";
 
 const Webhook = () => {
   const [activeWebhook, setActiveWebhook] = useState(null);
@@ -110,6 +111,7 @@ const Webhook = () => {
     );
   }
   return (
+    <RequireRole fineRole="EDITOR">
     <Block name="webhook-wrap">
       {content}
       <Elem name="footer">
@@ -130,6 +132,7 @@ const Webhook = () => {
         </Elem>
       </Elem>
     </Block>
+    </RequireRole>
   );
 };
 

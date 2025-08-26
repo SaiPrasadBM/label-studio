@@ -16,6 +16,7 @@ from rest_framework import generics, status
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from core.api_permissions import IsOrgAdmin
 
 logger = logging.getLogger(__name__)
 
@@ -125,6 +126,12 @@ class MLBackendListAPI(generics.ListCreateAPIView):
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['is_interactive']
 
+    def get_permissions(self):
+        permissions = super().get_permissions()
+        if self.request.method == 'POST':
+            permissions.append(IsOrgAdmin())
+        return permissions
+
     def get_queryset(self):
         project_pk = self.request.query_params.get('project')
         project = generics.get_object_or_404(Project, pk=project_pk)
@@ -220,6 +227,12 @@ class MLBackendDetailAPI(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = MLBackendSerializer
     permission_required = all_permissions.projects_change
     queryset = MLBackend.objects.all()
+
+    def get_permissions(self):
+        permissions = super().get_permissions()
+        if self.request.method in ('PATCH', 'PUT', 'DELETE'):
+            permissions.append(IsOrgAdmin())
+        return permissions
 
     def get_object(self):
         ml_backend = super(MLBackendDetailAPI, self).get_object()

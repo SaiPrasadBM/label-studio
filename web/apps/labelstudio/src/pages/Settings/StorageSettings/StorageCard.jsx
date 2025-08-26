@@ -5,7 +5,7 @@ import { ApiContext } from "../../../providers/ApiProvider";
 import { StorageSummary } from "./StorageSummary";
 import { IconEllipsisVertical } from "@humansignal/icons";
 
-export const StorageCard = ({ rootClass, target, storage, onEditStorage, onDeleteStorage, storageTypes }) => {
+export const StorageCard = ({ rootClass, target, storage, onEditStorage, onDeleteStorage, storageTypes, isEditor }) => {
   const [syncing, setSyncing] = useState(false);
   const api = useContext(ApiContext);
   const [storageData, setStorageData] = useState({ ...storage });
@@ -68,7 +68,7 @@ export const StorageCard = ({ rootClass, target, storage, onEditStorage, onDelet
             look="outlined"
             waiting={syncing}
             onClick={startSync}
-            disabled={notSyncedYet}
+            disabled={notSyncedYet || !isEditor}
             aria-label="Sync Storage"
           >
             Sync Storage

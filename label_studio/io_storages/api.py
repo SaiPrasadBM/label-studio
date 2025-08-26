@@ -18,6 +18,7 @@ from rest_framework.response import Response
 from rest_framework.settings import api_settings
 
 from label_studio.core.utils.common import load_func
+from core.api_permissions import IsOrgAdmin
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +31,12 @@ class ImportStorageListAPI(generics.ListCreateAPIView):
     parser_classes = (JSONParser, FormParser, MultiPartParser)
 
     serializer_class = ImportStorageSerializer
+
+    def get_permissions(self):
+        permissions = super().get_permissions()
+        if self.request.method in ('POST',):
+            permissions.append(IsOrgAdmin())
+        return permissions
 
     def get_queryset(self):
         project_pk = self.request.query_params.get('project')
@@ -51,6 +58,12 @@ class ImportStorageDetailAPI(generics.RetrieveUpdateDestroyAPIView):
     parser_classes = (JSONParser, FormParser, MultiPartParser)
     serializer_class = ImportStorageSerializer
 
+    def get_permissions(self):
+        permissions = super().get_permissions()
+        if self.request.method in ('PUT', 'PATCH', 'DELETE'):
+            permissions.append(IsOrgAdmin())
+        return permissions
+
     @extend_schema(exclude=True)
     def put(self, request, *args, **kwargs):
         return super(ImportStorageDetailAPI, self).put(request, *args, **kwargs)
@@ -62,6 +75,12 @@ class ExportStorageListAPI(generics.ListCreateAPIView):
     permission_classes = api_settings.DEFAULT_PERMISSION_CLASSES + [StoragePermission]
     parser_classes = (JSONParser, FormParser, MultiPartParser)
     serializer_class = ExportStorageSerializer
+
+    def get_permissions(self):
+        permissions = super().get_permissions()
+        if self.request.method in ('POST',):
+            permissions.append(IsOrgAdmin())
+        return permissions
 
     def get_queryset(self):
         project_pk = self.request.query_params.get('project')
@@ -100,6 +119,12 @@ class ExportStorageDetailAPI(generics.RetrieveUpdateDestroyAPIView):
     def put(self, request, *args, **kwargs):
         return super(ExportStorageDetailAPI, self).put(request, *args, **kwargs)
 
+    def get_permissions(self):
+        permissions = super().get_permissions()
+        if self.request.method in ('PUT', 'PATCH', 'DELETE'):
+            permissions.append(IsOrgAdmin())
+        return permissions
+
 
 class ImportStorageSyncAPI(generics.GenericAPIView):
 
@@ -121,6 +146,18 @@ class ImportStorageSyncAPI(generics.GenericAPIView):
         storage.sync()
         storage.refresh_from_db()
         return Response(self.serializer_class(storage).data)
+
+    def get_permissions(self):
+        permissions = super().get_permissions()
+        if self.request.method == 'POST':
+            permissions.append(IsOrgAdmin())
+        return permissions
+
+    def get_permissions(self):
+        permissions = super().get_permissions()
+        if self.request.method == 'POST':
+            permissions.append(IsOrgAdmin())
+        return permissions
 
 
 class ExportStorageSyncAPI(generics.GenericAPIView):
@@ -144,6 +181,12 @@ class ExportStorageSyncAPI(generics.GenericAPIView):
         storage.refresh_from_db()
         return Response(self.serializer_class(storage).data)
 
+    def get_permissions(self):
+        permissions = super().get_permissions()
+        if self.request.method == 'POST':
+            permissions.append(IsOrgAdmin())
+        return permissions
+
 
 class StorageValidateAPI(generics.CreateAPIView):
 
@@ -155,6 +198,12 @@ class StorageValidateAPI(generics.CreateAPIView):
 
         validate_storage_instance(request, self.serializer_class)
         return Response()
+
+    def get_permissions(self):
+        permissions = super().get_permissions()
+        if self.request.method == 'POST':
+            permissions.append(IsOrgAdmin())
+        return permissions
 
 
 @extend_schema(exclude=True)
@@ -197,6 +246,12 @@ class ImportStorageListFilesAPI(generics.CreateAPIView):
             return Response({'files': files})
         except Exception as exc:
             raise ValidationError(exc)
+
+    def get_permissions(self):
+        permissions = super().get_permissions()
+        if self.request.method == 'POST':
+            permissions.append(IsOrgAdmin())
+        return permissions
 
 
 @extend_schema(exclude=True)

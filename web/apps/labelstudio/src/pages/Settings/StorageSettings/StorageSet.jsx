@@ -12,8 +12,11 @@ import { useStorageCard } from "./hooks/useStorageCard";
 import { providers } from "./providers";
 import { StorageCard } from "./StorageCard";
 import { StorageForm } from "./StorageForm";
+import { useCurrentUser } from "../../../providers/CurrentUser";
 
 export const StorageSet = forwardRef(({ title, target, rootClass, buttonLabel }, ref) => {
+  const { user } = useCurrentUser();
+  const isEditor = user?.fine_role === 'EDITOR';
   const api = useContext(ApiContext);
   const project = useAtomValue(projectAtom);
   // The useStorageCard hook now consolidates this
@@ -28,6 +31,7 @@ export const StorageSet = forwardRef(({ title, target, rootClass, buttonLabel },
 
   const showStorageFormModal = useCallback(
     (storage) => {
+      if (!isEditor) return;
       const action = storage ? "Edit" : "Connect";
       const actionTarget = target === "export" ? "Target" : "Source";
       const title = `${action} ${actionTarget} Storage`;
@@ -74,14 +78,15 @@ export const StorageSet = forwardRef(({ title, target, rootClass, buttonLabel },
         ),
       });
     },
-    [project, fetchStorages, target, rootClass],
+    [project, fetchStorages, target, rootClass, isEditor],
   );
 
   const onEditStorage = useCallback(
     async (storage) => {
+      if (!isEditor) return;
       showStorageFormModal(storage);
     },
-    [showStorageFormModal],
+    [showStorageFormModal, isEditor],
   );
 
   // Expose showStorageFormModal to parent via ref
@@ -95,6 +100,7 @@ export const StorageSet = forwardRef(({ title, target, rootClass, buttonLabel },
 
   const onDeleteStorage = useCallback(
     async (storage) => {
+      if (!isEditor) return;
       confirm({
         title: "Deleting storage",
         body: "This action cannot be undone. Are you sure?",
@@ -112,13 +118,13 @@ export const StorageSet = forwardRef(({ title, target, rootClass, buttonLabel },
         },
       });
     },
-    [fetchStorages],
+    [fetchStorages, isEditor],
   );
 
   return (
     <Columns.Column title={title}>
       <div className={rootClass.elem("controls")}>
-        <Button onClick={() => showStorageFormModal()} disabled={loading} look="outlined" aria-label="Add storage">
+        <Button onClick={() => showStorageFormModal()} disabled={loading || !isEditor} look="outlined" aria-label="Add storage">
           {buttonLabel}
         </Button>
       </div>
@@ -137,6 +143,7 @@ export const StorageSet = forwardRef(({ title, target, rootClass, buttonLabel },
             storageTypes={storageTypes}
             onEditStorage={onEditStorage}
             onDeleteStorage={onDeleteStorage}
+            isEditor={isEditor}
           />
         ))
       )}

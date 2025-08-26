@@ -10,6 +10,7 @@ from rest_framework.exceptions import NotFound
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from core.api_permissions import IsOrgAdmin
 
 from .models import Webhook, WebhookAction
 from .serializers import WebhookSerializer, WebhookSerializerForUpdate
@@ -59,12 +60,19 @@ class WebhookListAPI(generics.ListCreateAPIView):
     queryset = Webhook.objects.all()
     serializer_class = WebhookSerializer
     permission_classes = [IsAuthenticated]
+
     filter_backends = [DjangoFilterBackend]
     filterset_class = WebhookFilterSet
     permission_required = ViewClassPermission(
         GET=all_permissions.webhooks_view,
         POST=all_permissions.webhooks_change,
     )
+
+    def get_permissions(self):
+        permissions = super().get_permissions()
+        if self.request.method == 'POST':
+            permissions.append(IsOrgAdmin())
+        return permissions
 
     def get_queryset(self):
         return Webhook.objects.filter(organization=self.request.user.active_organization)
@@ -133,6 +141,12 @@ class WebhookAPI(generics.RetrieveUpdateDestroyAPIView):
         if self.request.method in ['PUT', 'PATCH']:
             return WebhookSerializerForUpdate
         return super().get_serializer_class()
+
+    def get_permissions(self):
+        permissions = super().get_permissions()
+        if self.request.method in ('PUT', 'PATCH', 'DELETE'):
+            permissions.append(IsOrgAdmin())
+        return permissions
 
     def get_queryset(self):
         return Webhook.objects.filter(organization=self.request.user.active_organization)

@@ -31,6 +31,7 @@ from rest_framework.settings import api_settings
 from rest_framework.views import APIView
 from tasks.models import Annotation
 from users.models import User
+from core.api_permissions import IsOrgAdmin
 
 from label_studio.core.permissions import ViewClassPermission, all_permissions
 from label_studio.core.utils.params import bool_from_request
@@ -256,7 +257,7 @@ class OrganizationMemberDetailAPI(GetParentObjectMixin, generics.RetrieveDestroy
     @property
     def permission_classes(self):
         if self.request.method == 'DELETE':
-            return [IsAuthenticated, HasObjectPermission]
+            return [IsAuthenticated, IsOrgAdmin, HasObjectPermission]
         return api_settings.DEFAULT_PERMISSION_CLASSES
 
     def get_queryset(self):
@@ -329,6 +330,12 @@ class OrganizationAPI(generics.RetrieveUpdateAPIView):
     redirect_route = 'organizations-dashboard'
     redirect_kwarg = 'pk'
 
+    def get_permissions(self):
+        permissions = super().get_permissions()
+        if self.request.method in ('PATCH', 'PUT'):
+            permissions.append(IsOrgAdmin())
+        return permissions
+
     def get(self, request, *args, **kwargs):
         return super(OrganizationAPI, self).get(request, *args, **kwargs)
 
@@ -368,6 +375,11 @@ class OrganizationInviteAPI(generics.RetrieveAPIView):
         serializer.is_valid()
         return Response(serializer.data, status=200)
 
+    def get_permissions(self):
+        permissions = super().get_permissions()
+        permissions.append(IsOrgAdmin())
+        return permissions
+
 
 @method_decorator(
     name='post',
@@ -395,3 +407,8 @@ class OrganizationResetTokenAPI(APIView):
         serializer = OrganizationInviteSerializer(data={'invite_url': invite_url, 'token': org.token})
         serializer.is_valid()
         return Response(serializer.data, status=201)
+
+    def get_permissions(self):
+        permissions = super().get_permissions()
+        permissions.append(IsOrgAdmin())
+        return permissions

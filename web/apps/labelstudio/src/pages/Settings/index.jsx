@@ -9,22 +9,29 @@ import { PredictionsSettings } from "./PredictionsSettings/PredictionsSettings";
 import { StorageSettings } from "./StorageSettings/StorageSettings";
 import { isInLicense, LF_CLOUD_STORAGE_FOR_MANAGERS } from "../../utils/license-flags";
 import "./settings.scss";
+import { useCurrentUser } from "../../providers/CurrentUser";
 
 const isAllowCloudStorage = !isInLicense(LF_CLOUD_STORAGE_FOR_MANAGERS);
 
 export const MenuLayout = ({ children, ...routeProps }) => {
+  const { user } = useCurrentUser();
+  const isEditor = user?.fine_role === 'EDITOR';
+
+  const items = [
+    GeneralSettings,
+    LabelingSettings,
+    AnnotationSettings,
+    // Admin-only sections
+    isEditor && MachineLearningSettings,
+    PredictionsSettings,
+    isEditor && isAllowCloudStorage && StorageSettings,
+    isEditor && WebhookPage,
+    isEditor && DangerZone,
+  ].filter(Boolean);
+
   return (
     <SidebarMenu
-      menuItems={[
-        GeneralSettings,
-        LabelingSettings,
-        AnnotationSettings,
-        MachineLearningSettings,
-        PredictionsSettings,
-        isAllowCloudStorage && StorageSettings,
-        WebhookPage,
-        DangerZone,
-      ].filter(Boolean)}
+      menuItems={items}
       path={routeProps.match.url}
       children={children}
     />

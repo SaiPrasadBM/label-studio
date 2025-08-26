@@ -5,6 +5,7 @@ from rest_framework.permissions import IsAuthenticated
 
 from .models import SessionTimeoutPolicy
 from .serializers import SessionTimeoutPolicySerializer
+from core.api_permissions import IsOrgAdmin
 
 
 @method_decorator(
@@ -38,3 +39,10 @@ class SessionTimeoutPolicyView(generics.RetrieveUpdateAPIView):
         # Get or create the session policy for the organization
         policy, _ = SessionTimeoutPolicy.objects.get_or_create(organization=org)
         return policy
+
+    def get_permissions(self):
+        permissions = super().get_permissions()
+        # Session policy updates affect organization-wide security; restrict to Org Admins
+        if self.request.method in ('PATCH', 'PUT'):
+            permissions.append(IsOrgAdmin())
+        return permissions

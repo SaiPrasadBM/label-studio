@@ -12,9 +12,11 @@ import { TokenSettingsModal } from "@humansignal/app-common/blocks/TokenSettings
 import { IconPlus } from "@humansignal/icons";
 import { useToast } from "@humansignal/ui";
 import { InviteLink } from "./InviteLink";
+import { useCurrentUser } from "../../../providers/CurrentUser";
 import { SelectedUser } from "./SelectedUser";
 
 export const PeoplePage = () => {
+  const { user } = useCurrentUser();
   const apiSettingsModal = useRef();
   const toast = useToast();
   const [selectedUser, setSelectedUser] = useState(null);
@@ -61,18 +63,20 @@ export const PeoplePage = () => {
           <Space />
 
           <Space>
-            {isFF(FF_AUTH_TOKENS) && (
+            {isFF(FF_AUTH_TOKENS) && user?.fine_role === 'EDITOR' && (
               <Button look="outlined" onClick={showApiTokenSettingsModal} aria-label="Show API token settings">
                 API Tokens Settings
               </Button>
             )}
-            <Button
-              leading={<IconPlus className="!h-4" />}
-              onClick={() => setInvitationOpen(true)}
-              aria-label="Invite new member"
-            >
-              Add People
-            </Button>
+            {user?.fine_role === 'EDITOR' && (
+              <Button
+                leading={<IconPlus className="!h-4" />}
+                onClick={() => setInvitationOpen(true)}
+                aria-label="Invite new member"
+              >
+                Add People
+              </Button>
+            )}
           </Space>
         </Space>
       </Elem>

@@ -46,6 +46,7 @@ from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.settings import api_settings
+from core.api_permissions import IsOrgAdmin
 from rest_framework.views import exception_handler
 from tasks.models import Task
 from tasks.serializers import (
@@ -421,6 +422,12 @@ class ProjectAPI(generics.RetrieveUpdateDestroyAPIView):
     redirect_route = 'projects:project-detail'
     redirect_kwarg = 'pk'
 
+    def get_permissions(self):
+        permissions = super().get_permissions()
+        if self.request.method in ('PATCH', 'PUT', 'DELETE'):
+            permissions.append(IsOrgAdmin())
+        return permissions
+
     def get_queryset(self):
         serializer = GetFieldsSerializer(data=self.request.query_params)
         serializer.is_valid(raise_exception=True)
@@ -581,6 +588,7 @@ class ProjectLabelConfigValidateAPI(generics.RetrieveAPIView):
     parser_classes = (JSONParser, FormParser, MultiPartParser)
     serializer_class = ProjectLabelConfigSerializer
     permission_required = all_permissions.projects_change
+    permission_classes = api_settings.DEFAULT_PERMISSION_CLASSES + [IsOrgAdmin]
     queryset = Project.objects.all()
 
     def post(self, request, *args, **kwargs):
@@ -622,6 +630,12 @@ class ProjectSummaryResetAPI(GetParentObjectMixin, generics.CreateAPIView):
     permission_required = ViewClassPermission(
         POST=all_permissions.projects_change,
     )
+
+    def get_permissions(self):
+        permissions = super().get_permissions()
+        if self.request.method == 'POST':
+            permissions.append(IsOrgAdmin())
+        return permissions
 
     @extend_schema(exclude=True)
     def post(self, *args, **kwargs):
@@ -754,6 +768,12 @@ class ProjectTaskListAPI(GetParentObjectMixin, generics.ListCreateAPIView, gener
     serializer_class = TaskSerializer
     redirect_route = 'projects:project-settings'
     redirect_kwarg = 'pk'
+
+    def get_permissions(self):
+        permissions = super().get_permissions()
+        if self.request.method in ('POST', 'DELETE'):
+            permissions.append(IsOrgAdmin())
+        return permissions
 
     def get_serializer_class(self):
         if self.request.method == 'GET':

@@ -19,6 +19,7 @@ from organizations.models import Organization
 from rest_framework.authtoken.models import Token
 from users.functions import hash_upload
 from users.functions.last_activity import get_user_last_activity, schedule_activity_sync, set_user_last_activity
+from organizations.roles import is_org_admin
 
 YEAR_START = 1980
 YEAR_CHOICES = []
@@ -177,7 +178,9 @@ class User(UserMixin, AbstractBaseUser, PermissionsMixin, UserLastActivityMixin)
                 return settings.HOSTNAME + self.avatar.url
 
     def is_organization_admin(self, org_pk):
-        return True
+        from organizations.models import Organization
+        org = Organization.objects.filter(pk=org_pk).first()
+        return is_org_admin(self, org)
 
     def active_organization_annotations(self):
         return self.annotations.filter(project__organization=self.active_organization)

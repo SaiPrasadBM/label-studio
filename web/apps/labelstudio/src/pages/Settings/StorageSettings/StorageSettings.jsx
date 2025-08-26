@@ -4,6 +4,7 @@ import { useHistory, useLocation } from "react-router-dom";
 import { cn } from "../../../utils/bem";
 import { isInLicense, LF_CLOUD_STORAGE_FOR_MANAGERS } from "../../../utils/license-flags";
 import { StorageSet } from "./StorageSet";
+import { RequireRole } from "../../../components/Auth/RequireRole";
 
 const isAllowCloudStorage = !isInLicense(LF_CLOUD_STORAGE_FOR_MANAGERS);
 
@@ -28,6 +29,7 @@ export const StorageSettings = () => {
   }, [location, history]);
 
   return isAllowCloudStorage ? (
+    <RequireRole fineRole="EDITOR">
     <section className="max-w-[680px]">
       <Typography variant="headline" size="medium" className="mb-base">
         Cloud Storage
@@ -52,6 +54,7 @@ export const StorageSettings = () => {
         />
       </div>
     </section>
+    </RequireRole>
   ) : null;
 };
 

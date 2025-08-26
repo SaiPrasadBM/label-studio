@@ -4,6 +4,7 @@ from core.utils.common import load_func
 from core.utils.db import fast_first
 from django.conf import settings
 from organizations.models import OrganizationMember
+from organizations.roles import get_user_role_for_org, get_fine_grained_role
 from rest_flex_fields import FlexFieldsModelSerializer
 from rest_framework import serializers
 
@@ -16,6 +17,8 @@ class BaseUserSerializer(FlexFieldsModelSerializer):
     avatar = serializers.SerializerMethodField(read_only=True)
     active_organization_meta = serializers.SerializerMethodField(read_only=True)
     last_activity = serializers.DateTimeField(read_only=True, source='last_activity_cached')
+    coarse_role = serializers.SerializerMethodField(read_only=True)
+    fine_role = serializers.SerializerMethodField(read_only=True)
 
     def get_avatar(self, instance):
         return instance.avatar_url
@@ -35,6 +38,22 @@ class BaseUserSerializer(FlexFieldsModelSerializer):
             email = organization.created_by.email
 
         return {'title': title, 'email': email}
+
+    def get_coarse_role(self, instance):
+        """Return coarse role: OWNER | ADMIN | MEMBER based on active organization."""
+        try:
+            organization = instance.active_organization
+            return get_user_role_for_org(instance, organization)
+        except Exception:
+            return 'MEMBER'
+
+    def get_fine_role(self, instance):
+        """Return fine-grained role: EDITOR | ANNOTATOR | VIEWER based on active organization."""
+        try:
+            organization = instance.active_organization
+            return get_fine_grained_role(instance, organization)
+        except Exception:
+            return 'VIEWER'
 
     def _is_deleted(self, instance):
         if 'deleted_organization_members' in self.context:
@@ -101,6 +120,8 @@ class BaseUserSerializer(FlexFieldsModelSerializer):
             'phone',
             'active_organization',
             'active_organization_meta',
+            'coarse_role',
+            'fine_role',
             'allow_newsletters',
             'date_joined',
         )
