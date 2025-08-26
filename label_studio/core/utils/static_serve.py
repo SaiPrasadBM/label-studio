@@ -8,6 +8,7 @@ import posixpath
 from pathlib import Path
 
 from core.utils.manifest_assets import get_manifest_asset
+from django.conf import settings
 from django.http import (
     Http404,
     HttpResponseNotModified,
@@ -51,11 +52,24 @@ def serve(request, path, document_root=None, show_indexes=False, manifest_asset_
         raise Http404(_('Directory indexes are not allowed here.'))
     if manifest_asset_prefix and not fullpath.exists():
         possible_asset = get_manifest_asset(path)
+
+        # Strip FRONTEND_HOSTNAME if present (e.g., http://localhost:8080)
+        frontend_hostname = getattr(settings, 'FRONTEND_HOSTNAME', '') or ''
+        if frontend_hostname and possible_asset.startswith(frontend_hostname):
+            possible_asset = possible_asset[len(frontend_hostname) :]
+
+        # Normalize and strip manifest prefix (with or without leading slash)
         manifest_asset_prefix = (
             f'/{manifest_asset_prefix}' if not manifest_asset_prefix.startswith('/') else manifest_asset_prefix
         )
         if possible_asset.startswith(manifest_asset_prefix):
             possible_asset = possible_asset[len(manifest_asset_prefix) :]
+        elif possible_asset.startswith(manifest_asset_prefix.lstrip('/')):
+            possible_asset = possible_asset[len(manifest_asset_prefix.lstrip('/')) :]
+
+        # Ensure relative path for safe_join
+        possible_asset = posixpath.normpath(possible_asset).lstrip('/')
+
         fullpath = Path(safe_join(document_root, possible_asset))
     if not fullpath.exists():
         raise Http404(_('“%(path)s” does not exist') % {'path': fullpath})
