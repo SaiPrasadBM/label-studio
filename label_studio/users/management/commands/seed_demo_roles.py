@@ -2,8 +2,8 @@ from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
 from rest_framework.authtoken.models import Token
 
-from organizations.models import Organization
-from organizations.roles import get_user_role_for_org, get_fine_grained_role
+from organizations.models import Organization, OrganizationMember
+from organizations.roles import get_user_role_for_org, get_fine_grained_role, get_org_role
 
 
 class Command(BaseCommand):
@@ -28,10 +28,16 @@ class Command(BaseCommand):
             "--admin-password", default="admin123", help="Admin password"
         )
         parser.add_argument(
-            "--annotator-email", default="annotator@example.com", help="Annotator email"
+            "--supervisor-email", default="supervisor@example.com", help="Supervisor email"
         )
         parser.add_argument(
-            "--annotator-password", default="annot123", help="Annotator password"
+            "--supervisor-password", default="super123", help="Supervisor password"
+        )
+        parser.add_argument(
+            "--worker-email", default="worker@example.com", help="Worker email"
+        )
+        parser.add_argument(
+            "--worker-password", default="worker123", help="Worker password"
         )
         parser.add_argument(
             "--viewer-email", default="viewer@example.com", help="Viewer email (not added to org)"
@@ -64,10 +70,13 @@ class Command(BaseCommand):
             options["owner_email"], options["owner_password"], "Olivia", "Owner"
         )
         admin = create_user(
-            options["admin_email"], options["admin_password"], "Adam", "Admin", is_staff=True
+            options["admin_email"], options["admin_password"], "Manny", "Maintainer", is_staff=True
         )
-        annot = create_user(
-            options["annotator_email"], options["annotator_password"], "Ava", "Annotator"
+        supervisor = create_user(
+            options["supervisor_email"], options["supervisor_password"], "Sally", "Supervisor"
+        )
+        worker = create_user(
+            options["worker_email"], options["worker_password"], "Will", "Worker"
         )
         viewer = create_user(
             options["viewer_email"], options["viewer_password"], "Victor", "Viewer"
@@ -82,15 +91,18 @@ class Command(BaseCommand):
         owner.active_organization = org
         owner.save(update_fields=["active_organization"])
 
-        # 3) Add admin and annotator as members
-        org.add_user(admin)
-        org.add_user(annot)
+        # 3) Add members with roles: admin->MAINTAINER, supervisor->SUPERVISOR, worker->WORKER
+        org.add_user(admin, role=OrganizationMember.ROLE_MAINTAINER)
+        org.add_user(supervisor, role=OrganizationMember.ROLE_SUPERVISOR)
+        org.add_user(worker, role=OrganizationMember.ROLE_WORKER)
 
         # Set their active orgs
         admin.active_organization = org
-        annot.active_organization = org
+        supervisor.active_organization = org
+        worker.active_organization = org
         admin.save(update_fields=["active_organization"])
-        annot.save(update_fields=["active_organization"])
+        supervisor.save(update_fields=["active_organization"])
+        worker.save(update_fields=["active_organization"])
 
         # 4) Tokens for API usage
         def token(user):
@@ -98,8 +110,9 @@ class Command(BaseCommand):
 
         tokens = {
             "owner": token(owner),
-            "admin": token(admin),
-            "annotator": token(annot),
+            "maintainer": token(admin),
+            "supervisor": token(supervisor),
+            "worker": token(worker),
             "viewer": token(viewer),
         }
 
@@ -107,12 +120,13 @@ class Command(BaseCommand):
         def describe(u):
             coarse = get_user_role_for_org(u, org)
             fine = get_fine_grained_role(u, org)
+            orgr = get_org_role(u, org)
             self.stdout.write(
-                f"{u.email:24} -> coarse: {coarse:6} | fine: {fine} | token: {Token.objects.get(user=u).key}"
+                f"{u.email:24} -> org_role: {str(orgr):11} | coarse: {coarse:6} | fine: {fine} | token: {Token.objects.get(user=u).key}"
             )
 
         self.stdout.write(self.style.SUCCESS("Seed complete. Users and roles:"))
-        for u in [owner, admin, annot, viewer]:
+        for u in [owner, admin, supervisor, worker, viewer]:
             describe(u)
 
         self.stdout.write(self.style.NOTICE(f"Organization: {org.title} (id={org.id})"))

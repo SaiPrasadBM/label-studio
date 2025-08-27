@@ -18,7 +18,7 @@ from rest_framework.response import Response
 from rest_framework.settings import api_settings
 
 from label_studio.core.utils.common import load_func
-from core.api_permissions import IsOrgAdmin
+from core.api_permissions import IsOrgAdmin, IsOrgWorkerOrAbove, CanManageStorages
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +27,7 @@ StoragePermission = load_func(settings.STORAGE_PERMISSION)
 
 class ImportStorageListAPI(generics.ListCreateAPIView):
     permission_required = all_permissions.projects_change
-    permission_classes = api_settings.DEFAULT_PERMISSION_CLASSES + [StoragePermission]
+    permission_classes = api_settings.DEFAULT_PERMISSION_CLASSES + [StoragePermission, IsOrgWorkerOrAbove]
     parser_classes = (JSONParser, FormParser, MultiPartParser)
 
     serializer_class = ImportStorageSerializer
@@ -35,7 +35,7 @@ class ImportStorageListAPI(generics.ListCreateAPIView):
     def get_permissions(self):
         permissions = super().get_permissions()
         if self.request.method in ('POST',):
-            permissions.append(IsOrgAdmin())
+            permissions.append(CanManageStorages())
         return permissions
 
     def get_queryset(self):
@@ -54,14 +54,14 @@ class ImportStorageDetailAPI(generics.RetrieveUpdateDestroyAPIView):
     """RUD storage by pk specified in URL"""
 
     permission_required = all_permissions.projects_change
-    permission_classes = api_settings.DEFAULT_PERMISSION_CLASSES + [StoragePermission]
+    permission_classes = api_settings.DEFAULT_PERMISSION_CLASSES + [StoragePermission, IsOrgWorkerOrAbove]
     parser_classes = (JSONParser, FormParser, MultiPartParser)
     serializer_class = ImportStorageSerializer
 
     def get_permissions(self):
         permissions = super().get_permissions()
         if self.request.method in ('PUT', 'PATCH', 'DELETE'):
-            permissions.append(IsOrgAdmin())
+            permissions.append(CanManageStorages())
         return permissions
 
     @extend_schema(exclude=True)
@@ -72,14 +72,14 @@ class ImportStorageDetailAPI(generics.RetrieveUpdateDestroyAPIView):
 class ExportStorageListAPI(generics.ListCreateAPIView):
 
     permission_required = all_permissions.projects_change
-    permission_classes = api_settings.DEFAULT_PERMISSION_CLASSES + [StoragePermission]
+    permission_classes = api_settings.DEFAULT_PERMISSION_CLASSES + [StoragePermission, IsOrgWorkerOrAbove]
     parser_classes = (JSONParser, FormParser, MultiPartParser)
     serializer_class = ExportStorageSerializer
 
     def get_permissions(self):
         permissions = super().get_permissions()
         if self.request.method in ('POST',):
-            permissions.append(IsOrgAdmin())
+            permissions.append(CanManageStorages())
         return permissions
 
     def get_queryset(self):
@@ -122,7 +122,7 @@ class ExportStorageDetailAPI(generics.RetrieveUpdateDestroyAPIView):
     def get_permissions(self):
         permissions = super().get_permissions()
         if self.request.method in ('PUT', 'PATCH', 'DELETE'):
-            permissions.append(IsOrgAdmin())
+            permissions.append(CanManageStorages())
         return permissions
 
 
@@ -150,13 +150,7 @@ class ImportStorageSyncAPI(generics.GenericAPIView):
     def get_permissions(self):
         permissions = super().get_permissions()
         if self.request.method == 'POST':
-            permissions.append(IsOrgAdmin())
-        return permissions
-
-    def get_permissions(self):
-        permissions = super().get_permissions()
-        if self.request.method == 'POST':
-            permissions.append(IsOrgAdmin())
+            permissions.append(CanManageStorages())
         return permissions
 
 
@@ -184,7 +178,7 @@ class ExportStorageSyncAPI(generics.GenericAPIView):
     def get_permissions(self):
         permissions = super().get_permissions()
         if self.request.method == 'POST':
-            permissions.append(IsOrgAdmin())
+            permissions.append(CanManageStorages())
         return permissions
 
 
@@ -202,7 +196,7 @@ class StorageValidateAPI(generics.CreateAPIView):
     def get_permissions(self):
         permissions = super().get_permissions()
         if self.request.method == 'POST':
-            permissions.append(IsOrgAdmin())
+            permissions.append(CanManageStorages())
         return permissions
 
 
@@ -210,7 +204,7 @@ class StorageValidateAPI(generics.CreateAPIView):
 class ImportStorageListFilesAPI(generics.CreateAPIView):
 
     permission_required = all_permissions.projects_change
-    permission_classes = api_settings.DEFAULT_PERMISSION_CLASSES + [StoragePermission]
+    permission_classes = api_settings.DEFAULT_PERMISSION_CLASSES + [StoragePermission, IsOrgWorkerOrAbove]
     parser_classes = (JSONParser, FormParser, MultiPartParser)
     serializer_class = None  # Default serializer
 
@@ -250,7 +244,7 @@ class ImportStorageListFilesAPI(generics.CreateAPIView):
     def get_permissions(self):
         permissions = super().get_permissions()
         if self.request.method == 'POST':
-            permissions.append(IsOrgAdmin())
+            permissions.append(CanManageStorages())
         return permissions
 
 
@@ -259,6 +253,7 @@ class StorageFormLayoutAPI(generics.RetrieveAPIView):
 
     permission_required = all_permissions.projects_change
     parser_classes = (JSONParser, FormParser, MultiPartParser)
+    permission_classes = api_settings.DEFAULT_PERMISSION_CLASSES + [IsOrgWorkerOrAbove]
     storage_type = None
 
     @extend_schema(exclude=True)

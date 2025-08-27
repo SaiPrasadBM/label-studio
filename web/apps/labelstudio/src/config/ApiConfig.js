@@ -92,6 +92,12 @@ export const API_CONFIG = {
 
     accessTokenSettings: "GET:/jwt/settings",
     accessTokenUpdateSettings: "POST:/jwt/settings",
+
+    // EE Assignments (members and tasks)
+    eeProjectMembersAssign: "POST:/ee/projects/:pk/members/assign",
+    eeProjectMembersEnable: "POST:/ee/projects/:pk/members/enable",
+    eeTasksAssign: "POST:/ee/projects/:pk/tasks/assign",
+    eeTaskAssignSingle: "POST:/ee/projects/:pk/tasks/:taskId/assign",
   },
   alwaysExpectJSON: false,
 };

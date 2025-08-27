@@ -46,7 +46,7 @@ from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.settings import api_settings
-from core.api_permissions import IsOrgAdmin
+from core.api_permissions import IsOrgAdmin, IsOrgWorkerOrAbove, CanManageJobs
 from rest_framework.views import exception_handler
 from tasks.models import Task
 from tasks.serializers import (
@@ -239,12 +239,23 @@ class ProjectListAPI(generics.ListCreateAPIView):
         POST=all_permissions.projects_create,
     )
     pagination_class = ProjectListPagination
+    permission_classes = api_settings.DEFAULT_PERMISSION_CLASSES + [IsOrgWorkerOrAbove]
 
     def get_queryset(self):
         serializer = GetFieldsSerializer(data=self.request.query_params)
         serializer.is_valid(raise_exception=True)
         fields = serializer.validated_data.get('include')
         filter = serializer.validated_data.get('filter')
+        # Debug logging to diagnose permissions/auth issues during local dev
+        try:
+            logger.info(
+                "ProjectListAPI.get_queryset user=%s is_auth=%s active_org=%s",
+                getattr(self.request.user, 'username', None),
+                getattr(self.request.user, 'is_authenticated', False),
+                getattr(getattr(self.request.user, 'active_organization', None), 'id', None),
+            )
+        except Exception as _e:
+            logger.warning("ProjectListAPI.get_queryset debug log failed: %s", _e)
         projects = Project.objects.filter(organization=self.request.user.active_organization).order_by(
             F('pinned_at').desc(nulls_last=True), '-created_at'
         )
@@ -295,6 +306,7 @@ class ProjectCountsListAPI(generics.ListAPIView):
         GET=all_permissions.projects_view,
     )
     pagination_class = ProjectListPagination
+    permission_classes = api_settings.DEFAULT_PERMISSION_CLASSES + [IsOrgWorkerOrAbove]
 
     def get_queryset(self):
         serializer = GetFieldsSerializer(data=self.request.query_params)
@@ -418,6 +430,7 @@ class ProjectAPI(generics.RetrieveUpdateDestroyAPIView):
         POST=all_permissions.projects_create,
     )
     serializer_class = ProjectSerializer
+    permission_classes = api_settings.DEFAULT_PERMISSION_CLASSES + [IsOrgWorkerOrAbove]
 
     redirect_route = 'projects:project-detail'
     redirect_kwarg = 'pk'
@@ -486,6 +499,7 @@ class ProjectNextTaskAPI(generics.RetrieveAPIView):
     permission_required = all_permissions.tasks_view
     serializer_class = TaskWithAnnotationsAndPredictionsAndDraftsSerializer
     queryset = Project.objects.all()
+    permission_classes = api_settings.DEFAULT_PERMISSION_CLASSES + [IsOrgWorkerOrAbove]
 
     def get(self, request, *args, **kwargs):
         project = self.get_object()
@@ -513,6 +527,7 @@ class ProjectNextTaskAPI(generics.RetrieveAPIView):
 class LabelStreamHistoryAPI(generics.RetrieveAPIView):
     permission_required = all_permissions.tasks_view
     queryset = Project.objects.all()
+    permission_classes = api_settings.DEFAULT_PERMISSION_CLASSES + [IsOrgWorkerOrAbove]
 
     def get(self, request, *args, **kwargs):
         project = self.get_object()
@@ -612,6 +627,7 @@ class ProjectSummaryAPI(generics.RetrieveAPIView):
     serializer_class = ProjectSummarySerializer
     permission_required = all_permissions.projects_view
     queryset = ProjectSummary.objects.all()
+    permission_classes = api_settings.DEFAULT_PERMISSION_CLASSES + [IsOrgWorkerOrAbove]
 
     @extend_schema(exclude=True)
     def get(self, *args, **kwargs):
@@ -630,6 +646,7 @@ class ProjectSummaryResetAPI(GetParentObjectMixin, generics.CreateAPIView):
     permission_required = ViewClassPermission(
         POST=all_permissions.projects_change,
     )
+    permission_classes = api_settings.DEFAULT_PERMISSION_CLASSES + [IsOrgWorkerOrAbove]
 
     def get_permissions(self):
         permissions = super().get_permissions()
@@ -673,7 +690,7 @@ class ProjectSummaryResetAPI(GetParentObjectMixin, generics.CreateAPIView):
 )
 class ProjectImportAPI(generics.RetrieveAPIView):
     permission_required = all_permissions.projects_change
-    permission_classes = api_settings.DEFAULT_PERMISSION_CLASSES + [ProjectImportPermission]
+    permission_classes = api_settings.DEFAULT_PERMISSION_CLASSES + [IsOrgWorkerOrAbove, ProjectImportPermission]
     parser_classes = (JSONParser,)
     serializer_class = ProjectImportSerializer
     queryset = ProjectImport.objects.all()
@@ -701,7 +718,7 @@ class ProjectImportAPI(generics.RetrieveAPIView):
 )
 class ProjectReimportAPI(generics.RetrieveAPIView):
     permission_required = all_permissions.projects_change
-    permission_classes = api_settings.DEFAULT_PERMISSION_CLASSES + [ProjectImportPermission]
+    permission_classes = api_settings.DEFAULT_PERMISSION_CLASSES + [IsOrgWorkerOrAbove, ProjectImportPermission]
     parser_classes = (JSONParser,)
     serializer_class = ProjectReimportSerializer
     queryset = ProjectReimport.objects.all()
@@ -768,11 +785,12 @@ class ProjectTaskListAPI(GetParentObjectMixin, generics.ListCreateAPIView, gener
     serializer_class = TaskSerializer
     redirect_route = 'projects:project-settings'
     redirect_kwarg = 'pk'
+    permission_classes = api_settings.DEFAULT_PERMISSION_CLASSES + [IsOrgWorkerOrAbove]
 
     def get_permissions(self):
         permissions = super().get_permissions()
         if self.request.method in ('POST', 'DELETE'):
-            permissions.append(IsOrgAdmin())
+            permissions.append(CanManageJobs())
         return permissions
 
     def get_serializer_class(self):

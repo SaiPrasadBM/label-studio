@@ -6,6 +6,7 @@ import { Spinner } from "../../components";
 import { modal } from "../../components/Modal/Modal";
 import { Space } from "../../components/Space/Space";
 import { useAPI } from "../../providers/ApiProvider";
+import { useCurrentUser } from "../../providers/CurrentUser";
 import { useProject } from "../../providers/ProjectProvider";
 import { useContextProps, useParams } from "../../providers/RoutesProvider";
 import { addCrumb, deleteCrumb } from "../../services/breadrumbs";
@@ -64,6 +65,7 @@ export const DataManagerPage = ({ ...props }) => {
   const params = useParams();
   const history = useHistory();
   const api = useAPI();
+  const { user } = useCurrentUser();
   const { project } = useProject();
   const setContextProps = useContextProps();
   const [crashed, setCrashed] = useState(false);
@@ -185,6 +187,74 @@ export const DataManagerPage = ({ ...props }) => {
           return null;
         });
       });
+    }
+
+    // Register EE bulk assign action in Actions dropdown
+    try {
+      // derive capabilities from org role
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { getCapabilities } = require("../../utils/capabilities");
+      const caps = getCapabilities(user?.org_role, user?.fine_role, user?.coarse_role);
+      if (!caps?.can_assign_jobs_tasks_projects) {
+        // Don't expose action to workers
+        return;
+      }
+      const eeAssignAction = {
+        id: "ee_assign_tasks",
+        title: "Assign to user (EE)",
+        order: 500,
+      };
+
+      const eeAssignCallback = async (selection /*, action */) => {
+        try {
+          // selection here is the full actionParams object from AppStore.invokeAction
+          // with shape: { ordering, selectedItems: { all, included|excluded }, filters }
+          const selectedItems = selection?.selectedItems ?? {};
+          const selected = selectedItems?.included ?? [];
+          const isAll = selectedItems?.all === true;
+
+          if ((!selected || selected.length === 0) && !isAll) {
+            toast.show({ message: "Select at least one task to assign", type: ToastType.warning });
+            return;
+          }
+
+          // Simple prompt for user id; can be improved to user selector later
+          const input = window.prompt("Enter user ID to assign selected tasks to:");
+          const userId = Number(input);
+          if (!userId || !Number.isFinite(userId)) return;
+
+          // For MVP, we only support explicit selected IDs, not select-all filters expansion
+          if (isAll) {
+            toast.show({ message: "Assigning with Select All is not supported yet.", type: ToastType.info });
+            return;
+          }
+
+          const resp = await fetch(`/api/ee/projects/${project.id}/tasks/assign`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            // Backend expects: { user_id: int, task_ids: number[] }
+            body: JSON.stringify({ user_id: userId, task_ids: selected }),
+          });
+
+          if (!resp.ok) {
+            const err = await resp.json().catch(() => ({}));
+            throw new Error(err?.detail || `Request failed with ${resp.status}`);
+          }
+
+          toast.show({ message: `Assigned ${selected.length} task(s) to user ${userId}`, type: ToastType.success });
+          // Reload view and project counters
+          await dataManager.store.currentView?.reload?.();
+          dataManager.store.fetchProject();
+          dataManager.store.currentView?.clearSelection?.();
+        } catch (e) {
+          toast.show({ message: e.message || "Failed to assign tasks", type: ToastType.error });
+        }
+      };
+
+      dataManager.updateActions([[eeAssignAction, eeAssignCallback]]);
+    } catch (e) {
+      // Non-fatal; action registration failed
+      console.warn("Failed to register EE assign action", e);
     }
 
     setContextProps({ dmRef: dataManager });

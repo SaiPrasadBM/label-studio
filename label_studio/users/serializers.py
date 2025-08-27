@@ -4,7 +4,8 @@ from core.utils.common import load_func
 from core.utils.db import fast_first
 from django.conf import settings
 from organizations.models import OrganizationMember
-from organizations.roles import get_user_role_for_org, get_fine_grained_role
+from organizations.roles import get_user_role_for_org, get_fine_grained_role, get_org_role
+from django.contrib.auth.models import Group
 from rest_flex_fields import FlexFieldsModelSerializer
 from rest_framework import serializers
 
@@ -19,6 +20,8 @@ class BaseUserSerializer(FlexFieldsModelSerializer):
     last_activity = serializers.DateTimeField(read_only=True, source='last_activity_cached')
     coarse_role = serializers.SerializerMethodField(read_only=True)
     fine_role = serializers.SerializerMethodField(read_only=True)
+    org_role = serializers.SerializerMethodField(read_only=True)
+    system_groups = serializers.SerializerMethodField(read_only=True)
 
     def get_avatar(self, instance):
         return instance.avatar_url
@@ -54,6 +57,20 @@ class BaseUserSerializer(FlexFieldsModelSerializer):
             return get_fine_grained_role(instance, organization)
         except Exception:
             return 'VIEWER'
+
+    def get_org_role(self, instance):
+        """Return organization-specific role: OWNER | MAINTAINER | SUPERVISOR | WORKER (or None)."""
+        try:
+            organization = instance.active_organization
+            return get_org_role(instance, organization)
+        except Exception:
+            return None
+
+    def get_system_groups(self, instance):
+        try:
+            return list(instance.groups.values_list('name', flat=True))
+        except Exception:
+            return []
 
     def _is_deleted(self, instance):
         if 'deleted_organization_members' in self.context:
@@ -122,6 +139,8 @@ class BaseUserSerializer(FlexFieldsModelSerializer):
             'active_organization_meta',
             'coarse_role',
             'fine_role',
+            'org_role',
+            'system_groups',
             'allow_newsletters',
             'date_joined',
         )

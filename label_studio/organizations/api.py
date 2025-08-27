@@ -31,7 +31,7 @@ from rest_framework.settings import api_settings
 from rest_framework.views import APIView
 from tasks.models import Annotation
 from users.models import User
-from core.api_permissions import IsOrgAdmin
+from core.api_permissions import IsOrgAdmin, IsOrgWorkerOrAbove, CanInviteMembers, CanModifyMemberRoles
 
 from label_studio.core.permissions import ViewClassPermission, all_permissions
 from label_studio.core.utils.params import bool_from_request
@@ -67,6 +67,7 @@ class OrganizationListAPI(generics.ListCreateAPIView):
         DELETE=all_permissions.organizations_change,
     )
     serializer_class = OrganizationIdSerializer
+    permission_classes = tuple(api_settings.DEFAULT_PERMISSION_CLASSES) + (IsOrgWorkerOrAbove,)
 
     def filter_queryset(self, queryset):
         return queryset.filter(
@@ -79,6 +80,12 @@ class OrganizationListAPI(generics.ListCreateAPIView):
     @extend_schema(exclude=True)
     def post(self, request, *args, **kwargs):
         return super(OrganizationListAPI, self).post(request, *args, **kwargs)
+
+    def get_permissions(self):
+        permissions = super().get_permissions()
+        if self.request.method in ("POST", "PATCH", "PUT", "DELETE"):
+            permissions.append(IsOrgAdmin())
+        return permissions
 
 
 class OrganizationMemberListPagination(PageNumberPagination):
@@ -122,6 +129,7 @@ class OrganizationMemberListAPI(generics.ListAPIView):
     )
     serializer_class = OrganizationMemberListSerializer
     pagination_class = OrganizationMemberListPagination
+    permission_classes = tuple(api_settings.DEFAULT_PERMISSION_CLASSES) + (IsOrgWorkerOrAbove,)
 
     def _get_created_projects_map(self):
         members = self.paginate_queryset(self.filter_queryset(self.get_queryset()))
@@ -257,8 +265,9 @@ class OrganizationMemberDetailAPI(GetParentObjectMixin, generics.RetrieveDestroy
     @property
     def permission_classes(self):
         if self.request.method == 'DELETE':
-            return [IsAuthenticated, IsOrgAdmin, HasObjectPermission]
-        return api_settings.DEFAULT_PERMISSION_CLASSES
+            return [IsAuthenticated, CanModifyMemberRoles, HasObjectPermission]
+        # GET
+        return tuple(api_settings.DEFAULT_PERMISSION_CLASSES) + (IsOrgWorkerOrAbove,)
 
     def get_queryset(self):
         return OrganizationMember.objects.filter(organization=self.parent_object)
@@ -326,6 +335,7 @@ class OrganizationAPI(generics.RetrieveUpdateAPIView):
     queryset = Organization.objects.all()
     permission_required = all_permissions.organizations_change
     serializer_class = OrganizationSerializer
+    permission_classes = tuple(api_settings.DEFAULT_PERMISSION_CLASSES) + (IsOrgWorkerOrAbove,)
 
     redirect_route = 'organizations-dashboard'
     redirect_kwarg = 'pk'
@@ -366,6 +376,9 @@ class OrganizationInviteAPI(generics.RetrieveAPIView):
     queryset = Organization.objects.all()
     permission_required = all_permissions.organizations_change
 
+    # Read endpoint: require org worker or above
+    permission_classes = tuple(api_settings.DEFAULT_PERMISSION_CLASSES) + (IsOrgWorkerOrAbove,)
+
     def get(self, request, *args, **kwargs):
         org = request.user.active_organization
         invite_url = '{}?token={}'.format(reverse('user-signup'), org.token)
@@ -375,10 +388,7 @@ class OrganizationInviteAPI(generics.RetrieveAPIView):
         serializer.is_valid()
         return Response(serializer.data, status=200)
 
-    def get_permissions(self):
-        permissions = super().get_permissions()
-        permissions.append(IsOrgAdmin())
-        return permissions
+    # No admin requirement for GET; RBAC for read is handled via permission_classes above
 
 
 @method_decorator(
@@ -410,5 +420,5 @@ class OrganizationResetTokenAPI(APIView):
 
     def get_permissions(self):
         permissions = super().get_permissions()
-        permissions.append(IsOrgAdmin())
+        permissions.append(CanInviteMembers())
         return permissions

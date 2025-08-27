@@ -56,7 +56,9 @@
         },
         "production": {
           "buildTarget": "labelstudio:build:production",
-          "hmr": false
+          "hmr": false,
+          "port": 4300,
+          "host": "localhost"
         }
       }
     },

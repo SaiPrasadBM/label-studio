@@ -16,7 +16,11 @@ import { useCurrentUser } from "../../../providers/CurrentUser";
 
 export const StorageSet = forwardRef(({ title, target, rootClass, buttonLabel }, ref) => {
   const { user } = useCurrentUser();
-  const isEditor = user?.fine_role === 'EDITOR';
+  // Derive capabilities from org role; keep prop name `isEditor` for backward compatibility in child components
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { getCapabilities } = require("../../../utils/capabilities");
+  const caps = getCapabilities(user?.org_role, user?.fine_role, user?.coarse_role);
+  const isEditor = !!caps.can_manage_storages;
   const api = useContext(ApiContext);
   const project = useAtomValue(projectAtom);
   // The useStorageCard hook now consolidates this

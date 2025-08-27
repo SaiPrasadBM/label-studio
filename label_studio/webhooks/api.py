@@ -10,7 +10,7 @@ from rest_framework.exceptions import NotFound
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from core.api_permissions import IsOrgAdmin
+from core.api_permissions import IsOrgAdmin, IsOrgWorkerOrAbove
 
 from .models import Webhook, WebhookAction
 from .serializers import WebhookSerializer, WebhookSerializerForUpdate
@@ -59,7 +59,7 @@ class WebhookFilterSet(django_filters.FilterSet):
 class WebhookListAPI(generics.ListCreateAPIView):
     queryset = Webhook.objects.all()
     serializer_class = WebhookSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = (IsAuthenticated, IsOrgWorkerOrAbove)
 
     filter_backends = [DjangoFilterBackend]
     filterset_class = WebhookFilterSet
@@ -135,7 +135,7 @@ class WebhookListAPI(generics.ListCreateAPIView):
 class WebhookAPI(generics.RetrieveUpdateDestroyAPIView):
     queryset = Webhook.objects.all()
     serializer_class = WebhookSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = (IsAuthenticated, IsOrgWorkerOrAbove)
 
     def get_serializer_class(self):
         if self.request.method in ['PUT', 'PATCH']:
@@ -195,7 +195,7 @@ class WebhookAPI(generics.RetrieveUpdateDestroyAPIView):
     ),
 )
 class WebhookInfoAPI(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = (AllowAny,)
 
     def get(self, request, *args, **kwargs):
         result = {

@@ -52,7 +52,7 @@ from packaging.version import parse as parse_version
 from pyboxen import boxen
 from rest_framework import status
 from rest_framework.exceptions import APIException, ErrorDetail
-from rest_framework.views import Response, exception_handler
+from rest_framework.response import Response
 
 import label_studio
 
@@ -114,7 +114,8 @@ def custom_exception_handler(exc, context):
     if hasattr(exc, 'display_context'):
         response_data['display_context'] = deepcopy(exc.display_context)
 
-    # try rest framework handler
+    # try rest framework handler (import here to avoid circular import during app setup)
+    from rest_framework.views import exception_handler  # local import
     response = exception_handler(exc, context)
     if response is not None:
         response_data['status_code'] = response.status_code

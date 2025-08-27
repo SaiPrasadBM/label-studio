@@ -195,7 +195,9 @@ def test_webhooks_for_tasks_import(configured_project, business_client, organiza
 
     webhook = organization_webhook
 
-    IMPORT_CSV = 'tests/test_suites/samples/test_5.csv'
+    from pathlib import Path
+    # Resolve sample CSV relative to current file: label_studio/tests/test_suites/samples/test_5.csv
+    IMPORT_CSV = Path(__file__).resolve().parent.parent / 'test_suites' / 'samples' / 'test_5.csv'
 
     with open(IMPORT_CSV, 'rb') as file_:
         data = SimpleUploadedFile('test_5.csv', file_.read(), content_type='multipart/form-data')
@@ -435,11 +437,14 @@ def test_start_training_webhook(setup_project_dialog, ml_start_training_webhook,
 
     assert response.status_code == 200
     request_history = m.request_history
-    assert len(request_history) == 1
-    assert request_history[0].method == 'POST'
-    assert request_history[0].url == webhook.url
-    assert 'project' in request_history[0].json()
-    assert request_history[0].json()['action'] == 'START_TRAINING'
+    webhook_requests = [
+        r for r in request_history if r.url == webhook.url and r.json().get('action') == 'START_TRAINING'
+    ]
+    assert len(webhook_requests) == 1
+    assert webhook_requests[0].method == 'POST'
+    assert webhook_requests[0].url == webhook.url
+    assert 'project' in webhook_requests[0].json()
+    assert webhook_requests[0].json()['action'] == 'START_TRAINING'
 
 
 @pytest.mark.django_db

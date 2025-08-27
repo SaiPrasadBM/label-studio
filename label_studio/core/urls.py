@@ -112,6 +112,14 @@ urlpatterns = [
     path('docs/api/schema/yaml/', SpectacularYAMLAPIView.as_view(), name='schema-yaml'),
 ]
 
+# Include Enterprise URLs if enabled via settings
+if getattr(settings, 'EE_ASSIGNMENTS_ENABLED', False):
+    ee_patterns = [
+        path('ee/', include('label_studio.ee.assignments.urls')),
+        path('api/ee/', include('label_studio.ee.assignments.urls')),
+    ]
+    urlpatterns = ee_patterns + urlpatterns
+
 if settings.DEBUG:
     try:
         import debug_toolbar

@@ -13,10 +13,12 @@
       },
       "configurations": {
         "production": {
-          "devServerTarget": "labelstudio:serve:production"
+          "devServerTarget": "labelstudio:serve:production",
+          "baseUrl": "http://localhost:8010/"
         },
         "ci": {
-          "devServerTarget": "labelstudio:serve-static"
+          "devServerTarget": "labelstudio:serve-static",
+          "baseUrl": "http://localhost:4200/"
         }
       }
     }

@@ -792,6 +792,9 @@ DATA_MANAGER_FILTER_ALLOWLIST = list(
     )
 )
 
+# EE: enable enterprise assignments URLs (guarded include in core.urls)
+EE_ASSIGNMENTS_ENABLED = get_bool_env('EE_ASSIGNMENTS_ENABLED', False)
+
 if ENABLE_CSP := get_bool_env('ENABLE_CSP', True):
     CSP_DEFAULT_SRC = (
         "'self'",
@@ -828,6 +831,28 @@ if ENABLE_CSP := get_bool_env('ENABLE_CSP', True):
     CSP_REPORT_ONLY = get_bool_env('LS_CSP_REPORT_ONLY', True)
     CSP_REPORT_URI = get_env('LS_CSP_REPORT_URI', None)
     CSP_INCLUDE_NONCE_IN = ['script-src', 'default-src']
+
+    # Development-time allowances for running the React app via HMR on localhost:8010
+    # This permits loading JS/CSS from the dev server and connecting to its WebSocket endpoint.
+    if FRONTEND_HMR:
+        CSP_SCRIPT_SRC = (
+            *CSP_SCRIPT_SRC,
+            "'unsafe-eval'",  # webpack dev server often requires eval in development
+            'http://localhost:8010',
+        )
+        CSP_STYLE_SRC = (
+            *CSP_STYLE_SRC,
+            'http://localhost:8010',
+        )
+        CSP_IMG_SRC = (
+            *CSP_IMG_SRC,
+            'http://localhost:8010',
+        )
+        CSP_CONNECT_SRC = (
+            *CSP_CONNECT_SRC,
+            'http://localhost:8010',
+            'ws://localhost:8010',
+        )
 
     MIDDLEWARE.append('core.middleware.HumanSignalCspMiddleware')
 

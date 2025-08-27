@@ -16,7 +16,7 @@ from rest_framework import generics, status
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from core.api_permissions import IsOrgAdmin
+from core.api_permissions import IsOrgAdmin, IsOrgWorkerOrAbove
 
 logger = logging.getLogger(__name__)
 
@@ -125,6 +125,7 @@ class MLBackendListAPI(generics.ListCreateAPIView):
     serializer_class = MLBackendSerializer
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['is_interactive']
+    permission_classes = tuple(APIView.permission_classes) + (IsOrgWorkerOrAbove,)
 
     def get_permissions(self):
         permissions = super().get_permissions()
@@ -227,6 +228,7 @@ class MLBackendDetailAPI(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = MLBackendSerializer
     permission_required = all_permissions.projects_change
     queryset = MLBackend.objects.all()
+    permission_classes = tuple(APIView.permission_classes) + (IsOrgWorkerOrAbove,)
 
     def get_permissions(self):
         permissions = super().get_permissions()
@@ -296,6 +298,15 @@ class MLBackendTrainAPI(APIView):
 
     permission_required = all_permissions.projects_change
 
+    # Base: org member for access; write method tightened below
+    permission_classes = tuple(APIView.permission_classes) + (IsOrgWorkerOrAbove,)
+
+    def get_permissions(self):
+        permissions = super().get_permissions()
+        if self.request.method == 'POST':
+            permissions.append(IsOrgAdmin())
+        return permissions
+
     def post(self, request, *args, **kwargs):
         ml_backend = generics.get_object_or_404(MLBackend, pk=self.kwargs['pk'])
         self.check_object_permissions(self.request, ml_backend)
@@ -341,6 +352,15 @@ class MLBackendTrainAPI(APIView):
 class MLBackendPredictTestAPI(APIView):
     serializer_class = MLBackendSerializer
     permission_required = all_permissions.projects_change
+
+    # Base: org member for access; write method tightened below
+    permission_classes = tuple(APIView.permission_classes) + (IsOrgWorkerOrAbove,)
+
+    def get_permissions(self):
+        permissions = super().get_permissions()
+        if self.request.method == 'POST':
+            permissions.append(IsOrgAdmin())
+        return permissions
 
     def post(self, request, *args, **kwargs):
         ml_backend = generics.get_object_or_404(MLBackend, pk=self.kwargs['pk'])
@@ -410,6 +430,7 @@ class MLBackendInteractiveAnnotating(APIView):
     """
 
     permission_required = all_permissions.tasks_view
+    permission_classes = tuple(APIView.permission_classes) + (IsOrgWorkerOrAbove,)
 
     def _error_response(self, message, log_function=logger.info):
         log_function(message)
@@ -482,6 +503,7 @@ class MLBackendInteractiveAnnotating(APIView):
 class MLBackendVersionsAPI(generics.RetrieveAPIView):
     # TODO(jo): implement this view with a serializer and replace the handwritten schema above with it
     permission_required = all_permissions.projects_change
+    permission_classes = tuple(APIView.permission_classes) + (IsOrgWorkerOrAbove,)
 
     def get(self, request, *args, **kwargs):
         ml_backend = generics.get_object_or_404(MLBackend, pk=self.kwargs['pk'])

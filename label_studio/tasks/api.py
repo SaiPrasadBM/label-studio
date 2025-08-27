@@ -47,6 +47,7 @@ from webhooks.utils import (
     api_webhook_for_delete,
     emit_webhooks_for_instance,
 )
+from core.api_permissions import CanManageJobs
 
 logger = logging.getLogger(__name__)
 
@@ -202,6 +203,12 @@ class TaskListAPI(DMTaskListAPI):
         emit_webhooks_for_instance(
             self.request.user.active_organization, project, WebhookAction.TASKS_CREATED, [instance]
         )
+
+    def get_permissions(self):
+        permissions = super().get_permissions()
+        if self.request.method in ('POST',):
+            permissions.append(CanManageJobs())
+        return permissions
 
 
 @method_decorator(
@@ -378,6 +385,12 @@ class TaskAPI(generics.RetrieveUpdateDestroyAPIView):
     @extend_schema(exclude=True)
     def put(self, request, *args, **kwargs):
         return super(TaskAPI, self).put(request, *args, **kwargs)
+
+    def get_permissions(self):
+        permissions = super().get_permissions()
+        if self.request.method in ('PUT', 'PATCH', 'DELETE'):
+            permissions.append(CanManageJobs())
+        return permissions
 
 
 @method_decorator(

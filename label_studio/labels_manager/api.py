@@ -16,7 +16,7 @@ from rest_framework import views, viewsets
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 from webhooks.utils import api_webhook, api_webhook_for_delete
-from core.api_permissions import IsOrgAdmin
+from core.api_permissions import IsOrgAdmin, IsOrgWorkerOrAbove
 
 from .functions import bulk_update_label
 from .models import Label, LabelLink
@@ -101,6 +101,7 @@ class LabelAPI(viewsets.ModelViewSet):
         PATCH=all_permissions.labels_change,
         DELETE=all_permissions.labels_delete,
     )
+    permission_classes = tuple(views.api_settings.DEFAULT_PERMISSION_CLASSES) + (IsOrgWorkerOrAbove,)
 
     def get_permissions(self):
         permissions = super().get_permissions()
@@ -214,6 +215,13 @@ class LabelLinkAPI(viewsets.ModelViewSet):
         PATCH=all_permissions.labels_change,
         DELETE=all_permissions.labels_delete,
     )
+    permission_classes = tuple(views.api_settings.DEFAULT_PERMISSION_CLASSES) + (IsOrgWorkerOrAbove,)
+
+    def get_permissions(self):
+        permissions = super().get_permissions()
+        if self.request.method in ('POST', 'PATCH', 'PUT', 'DELETE'):
+            permissions.append(IsOrgAdmin())
+        return permissions
 
     def get_queryset(self):
         return LabelLink.objects.filter(label__organization=self.request.user.active_organization).annotate(
@@ -251,6 +259,7 @@ class LabelLinkAPI(viewsets.ModelViewSet):
 )
 class LabelBulkUpdateAPI(views.APIView):
     permission_required = all_permissions.labels_change
+    permission_classes = tuple(views.api_settings.DEFAULT_PERMISSION_CLASSES) + (IsOrgWorkerOrAbove,)
 
     def get_permissions(self):
         permissions = super().get_permissions()

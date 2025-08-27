@@ -372,12 +372,21 @@ class Task(TaskMixin, models.Model):
             ):
                 lock_ttl = self.project.custom_task_lock_ttl
             expire_at = now() + datetime.timedelta(seconds=lock_ttl)
+            request = get_current_request()
             try:
                 task_lock = TaskLock.objects.get(task=self, user=user)
             except TaskLock.DoesNotExist:
-                TaskLock.objects.create(task=self, user=user, expire_at=expire_at)
+                TaskLock.objects.create(
+                    task=self,
+                    user=user,
+                    expire_at=expire_at,
+                    assigned_by=getattr(request, 'user', None) if request else None,
+                )
             else:
                 task_lock.expire_at = expire_at
+                # Update assigned_by only if it's empty; keep original assigner otherwise
+                if getattr(task_lock, 'assigned_by_id', None) is None:
+                    task_lock.assigned_by = getattr(request, 'user', None) if request else None
                 task_lock.save()
             logger.log(
                 get_next_task_logging_level(user),
@@ -812,6 +821,13 @@ class TaskLock(models.Model):
         help_text='User who locked this task',
     )
     created_at = models.DateTimeField(_('created at'), auto_now_add=True, help_text='Creation time', null=True)
+    assigned_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        related_name='created_task_locks',
+        on_delete=models.SET_NULL,
+        null=True,
+        help_text='User who assigned this task',
+    )
 
 
 class AnnotationDraft(models.Model):

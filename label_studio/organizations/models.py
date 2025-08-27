@@ -1,6 +1,7 @@
 """This file and its contents are licensed under the Apache License 2.0. Please see the included NOTICE for copyright information and LICENSE for a copy of the license.
 """
 import logging
+from django.core.exceptions import ValidationError
 
 from core.utils.common import create_hash, load_func
 from django.conf import settings
@@ -38,6 +39,28 @@ class OrganizationMember(OrganizationMemberMixin, models.Model):
         'If NULL, the member is not considered deleted.',
     )
 
+    # Organization-specific role
+    ROLE_OWNER = 'OWNER'
+    ROLE_MAINTAINER = 'MAINTAINER'
+    ROLE_SUPERVISOR = 'SUPERVISOR'
+    ROLE_WORKER = 'WORKER'
+
+    ROLE_CHOICES = (
+        (ROLE_OWNER, 'Owner'),
+        (ROLE_MAINTAINER, 'Maintainer'),
+        (ROLE_SUPERVISOR, 'Supervisor'),
+        (ROLE_WORKER, 'Worker'),
+    )
+
+    role = models.CharField(
+        _('organization role'),
+        max_length=16,
+        choices=ROLE_CHOICES,
+        default=ROLE_WORKER,
+        db_index=True,
+        help_text='Organization-specific role for this member',
+    )
+
     # objects = OrganizationMemberQuerySet.as_manager()
 
     @classmethod
@@ -57,6 +80,19 @@ class OrganizationMember(OrganizationMemberMixin, models.Model):
 
     class Meta:
         ordering = ['pk']
+
+    def clean(self):
+        """Validate role constraints for organization membership.
+
+        - Only the organization creator can have the OWNER role
+        - The creator's role cannot be changed away from OWNER
+        """
+        super().clean()
+        if self.organization_id and self.user_id:
+            if self.role == self.ROLE_OWNER and self.user_id != self.organization.created_by_id:
+                raise ValidationError('OWNER role can only be assigned to the organization creator.')
+            if self.user_id == getattr(self.organization, 'created_by_id', None) and self.role != self.ROLE_OWNER:
+                raise ValidationError('The organization creator must retain the OWNER role and cannot be downgraded.')
 
     def soft_delete(self):
         with transaction.atomic():
@@ -137,13 +173,31 @@ class Organization(OrganizationMixin, models.Model):
     def has_permission(self, user):
         return OrganizationMember.objects.filter(user=user, organization=self, deleted_at__isnull=True).exists()
 
-    def add_user(self, user):
+    def add_user(self, user, role=None):
         if self.users.filter(pk=user.pk).exists():
-            logger.debug('User already exists in organization.')
+            # If role is provided, update existing membership role (idempotent reseed support)
+            if role is not None:
+                # Enforce OWNER semantics on update
+                if user.id == self.created_by_id and role != OrganizationMember.ROLE_OWNER:
+                    raise ValidationError('Owner role cannot be changed for the organization creator.')
+                if role == OrganizationMember.ROLE_OWNER and user.id != self.created_by_id:
+                    raise ValidationError('OWNER role cannot be assigned to a non-creator.')
+                OrganizationMember.objects.filter(user=user, organization=self).update(role=role)
+                logger.debug('Updated existing organization member role.')
+            else:
+                logger.debug('User already exists in organization.')
             return
 
         with transaction.atomic():
-            om = OrganizationMember(user=user, organization=self)
+            # Optional role param, else fallback to attribute on user, else default to WORKER
+            # If adding the creator, force OWNER regardless of provided role
+            if user.id == self.created_by_id:
+                role_to_assign = OrganizationMember.ROLE_OWNER
+            else:
+                if role == OrganizationMember.ROLE_OWNER:
+                    raise ValidationError('OWNER role cannot be assigned to a non-creator.')
+                role_to_assign = role or getattr(user, '_org_role_to_assign', None) or OrganizationMember.ROLE_WORKER
+            om = OrganizationMember(user=user, organization=self, role=role_to_assign)
             om.save()
 
             return om

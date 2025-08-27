@@ -1,101 +1,120 @@
-"""Simple role helpers without DB schema changes.
+"""Organization role helpers based on persisted membership roles.
 
-Coarse roles are inferred as:
-- OWNER: user == organization.created_by
-- ADMIN: Django is_superuser or is_staff (optional admin ability)
-- MEMBER: default for other users in the organization
-
-Fine-grained roles (scaffolded, not persisted):
-- EDITOR: can configure projects, manage tasks/exports, manage webhooks/storage
-- ANNOTATOR: can view and annotate tasks
-- VIEWER: can only view
-
-These helpers provide a consistent API to check capabilities without DB changes.
+Defines org roles: OWNER, MAINTAINER, SUPERVISOR, WORKER.
+Also provides backward-compatible coarse/fine roles for existing frontend usage.
 """
 from __future__ import annotations
-from typing import Literal, Optional, Dict, Set
+from typing import Literal, Dict, Set
 
-from django.conf import settings
+from organizations.models import OrganizationMember
 
-Role = Literal["OWNER", "ADMIN", "MEMBER"]
+# New org roles
+OrgRole = Literal["OWNER", "MAINTAINER", "SUPERVISOR", "WORKER"]
+
+# Back-compat types
+CoarseRole = Literal["OWNER", "ADMIN", "MEMBER"]
 FineRole = Literal["EDITOR", "ANNOTATOR", "VIEWER"]
 
 
-def get_user_role_for_org(user, organization) -> Role:
-    if user is None or not user.is_authenticated or organization is None:
-        return "MEMBER"
+def get_org_role(user, organization) -> OrgRole | None:
+    if not user or not getattr(user, "is_authenticated", False) or not organization:
+        return None
+    try:
+        om = OrganizationMember.find_by_user(user, organization.pk)
+        # Owner override if created_by
+        if organization.created_by_id == user.id:
+            return OrganizationMember.ROLE_OWNER
+        return om.role
+    except Exception:
+        # Not a member
+        if organization and organization.created_by_id == user.id:
+            return OrganizationMember.ROLE_OWNER
+        return None
 
-    # Owner
-    if organization.created_by_id == user.id:
+
+def is_org_owner(user, organization) -> bool:
+    return bool(organization and user and organization.created_by_id == user.id)
+
+
+def is_org_maintainer(user, organization) -> bool:
+    role = get_org_role(user, organization)
+    return role in {OrganizationMember.ROLE_OWNER, OrganizationMember.ROLE_MAINTAINER}
+
+
+def is_org_supervisor(user, organization) -> bool:
+    role = get_org_role(user, organization)
+    return role in {
+        OrganizationMember.ROLE_OWNER,
+        OrganizationMember.ROLE_MAINTAINER,
+        OrganizationMember.ROLE_SUPERVISOR,
+    }
+
+
+def is_org_worker(user, organization) -> bool:
+    role = get_org_role(user, organization)
+    return role in {
+        OrganizationMember.ROLE_OWNER,
+        OrganizationMember.ROLE_MAINTAINER,
+        OrganizationMember.ROLE_SUPERVISOR,
+        OrganizationMember.ROLE_WORKER,
+    }
+
+
+# Backward-compatible helpers
+def get_user_role_for_org(user, organization) -> CoarseRole:
+    if is_org_owner(user, organization):
         return "OWNER"
-
-    # System-level admin (Django admin)
-    if getattr(user, "is_superuser", False) or getattr(user, "is_staff", False):
+    role = get_org_role(user, organization)
+    if role in {OrganizationMember.ROLE_MAINTAINER}:
         return "ADMIN"
-
-    # Otherwise a regular member
+    if role in {
+        OrganizationMember.ROLE_SUPERVISOR,
+        OrganizationMember.ROLE_WORKER,
+    }:
+        return "MEMBER"
     return "MEMBER"
 
 
 def is_org_admin(user, organization) -> bool:
-    role = get_user_role_for_org(user, organization)
-    return role in ("OWNER", "ADMIN")
+    # Admin-like: OWNER or MAINTAINER
+    return is_org_maintainer(user, organization)
 
-
-def can_manage_projects(user, organization) -> bool:
-    # For now, only admins (incl. owner) can manage projects
-    return is_org_admin(user, organization)
-
-
-def can_import_data(user, organization) -> bool:
-    # Example capability: restrict imports to admins
-    return is_org_admin(user, organization)
-
-
-def can_annotate(user, organization) -> bool:
-    # Everyone who is a member of the active organization can annotate
-    if organization is None:
-        return False
-    return organization.has_permission(user)
-
-
-# ----- Fine-grained role scaffolding -----
 
 def get_fine_grained_role(user, organization) -> FineRole:
-    """Infer a fine-grained role from org membership without DB changes.
-
-    - EDITOR: org admins (OWNER/ADMIN)
-    - ANNOTATOR: org member with permission
-    - VIEWER: authenticated but no org membership (or anonymous -> VIEWER False access)
-    """
-    if user is None or not getattr(user, "is_authenticated", False):
+    if not user or not getattr(user, "is_authenticated", False):
         return "VIEWER"
-
-    if is_org_admin(user, organization):
+    if is_org_maintainer(user, organization):
         return "EDITOR"
-
-    if organization is not None and organization.has_permission(user):
+    if is_org_worker(user, organization):
+        # SUPERVISOR/WORKER -> ANNOTATOR by current UI mapping
         return "ANNOTATOR"
-
     return "VIEWER"
 
 
-# Capability map for clarity and potential future expansion
+# Capability map tuned to new semantics via coarse mapping
+# Note: Owner implicitly has all Maintainer capabilities
 ROLE_CAPABILITIES: Dict[FineRole, Set[str]] = {
     "EDITOR": {
+        # Maintainer-equivalent
         "view_project",
+        "view_all_tasks",
         "annotate",
         "export",
         "manage_project_settings",
         "manage_tasks",
+        "manage_jobs",
         "manage_webhooks",
         "manage_storages",
-        "manage_members",
+        "invite_members",
+        "modify_member_roles",
+        "create_projects",
+        "assign_jobs_tasks_projects",
     },
     "ANNOTATOR": {
+        # Worker/Supervisor mapped as annotators in fine-grained role
         "view_project",
         "annotate",
-        "export",  # many orgs allow annotators to export; adjust if needed
+        "export",
     },
     "VIEWER": {
         "view_project",
@@ -104,11 +123,13 @@ ROLE_CAPABILITIES: Dict[FineRole, Set[str]] = {
 
 
 def has_capability(user, organization, capability: str) -> bool:
+    # Owners get all maintainer capabilities
+    if is_org_owner(user, organization):
+        return True
     role = get_fine_grained_role(user, organization)
     return capability in ROLE_CAPABILITIES.get(role, set())
 
 
-# Convenience wrappers
 def can_view_project(user, organization) -> bool:
     return has_capability(user, organization, "view_project")
 
@@ -121,6 +142,10 @@ def can_manage_tasks(user, organization) -> bool:
     return has_capability(user, organization, "manage_tasks")
 
 
+def can_manage_jobs(user, organization) -> bool:
+    return has_capability(user, organization, "manage_jobs")
+
+
 def can_manage_webhooks(user, organization) -> bool:
     return has_capability(user, organization, "manage_webhooks")
 
@@ -130,4 +155,39 @@ def can_manage_storages(user, organization) -> bool:
 
 
 def can_manage_members(user, organization) -> bool:
-    return has_capability(user, organization, "manage_members")
+    # Back-compat: manage_members now split into inviting and modifying roles
+    return can_invite_members(user, organization) and can_modify_member_roles(user, organization)
+
+
+def can_invite_members(user, organization) -> bool:
+    # Maintainer and Owner
+    return has_capability(user, organization, "invite_members")
+
+
+def can_modify_member_roles(user, organization) -> bool:
+    # Maintainer and Owner
+    return has_capability(user, organization, "modify_member_roles")
+
+
+# Back-compat wrapper used by projects.permissions
+def can_import_data(user, organization) -> bool:
+    # Restrict imports to maintainer (admin-like) and owner
+    return is_org_maintainer(user, organization)
+
+
+# New helpers per requested semantics
+def can_view_all_tasks(user, organization) -> bool:
+    return has_capability(user, organization, "view_all_tasks")
+
+
+def can_create_projects(user, organization) -> bool:
+    return has_capability(user, organization, "create_projects")
+
+
+def can_assign_jobs_tasks_projects(user, organization) -> bool:
+    # Supervisors can assign, maintainers/owners too; workers typically cannot
+    if is_org_owner(user, organization) or is_org_maintainer(user, organization):
+        return True
+    # Supervisors: mapped as ANNOTATOR fine role, so explicitly allow
+    role = get_org_role(user, organization)
+    return role == OrganizationMember.ROLE_SUPERVISOR
