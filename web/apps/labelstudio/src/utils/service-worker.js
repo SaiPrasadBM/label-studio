@@ -15,9 +15,16 @@ function registerServiceWorker(serviceWorkerFileName) {
 
 function awakenServiceWorker() {
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.ready.then((registration) => {
-      registration.active.postMessage({ type: "awaken" });
-    });
+    navigator.serviceWorker.ready
+      .then((registration) => {
+        const active = registration.active || navigator.serviceWorker.controller;
+        if (active && typeof active.postMessage === "function") {
+          active.postMessage({ type: "awaken" });
+        }
+      })
+      .catch(() => {
+        // ignore readiness issues silently
+      });
   }
 }
 
