@@ -100,6 +100,12 @@ const displayErrorModal: ErrorDisplayMessage = (errorDetails) => {
         possum={false}
         title={"Connection refused"}
         message={"Server not responding. Is it still running?"}
+        errorId={undefined}
+        stacktrace={undefined}
+        validation={[]}
+        version={undefined}
+        onGoBack={undefined}
+        onReload={undefined}
       />
     ) : (
       <ErrorWrapper
@@ -107,6 +113,9 @@ const displayErrorModal: ErrorDisplayMessage = (errorDetails) => {
         title={title}
         message={message}
         stacktrace={IMPROVE_GLOBAL_ERROR_MESSAGES ? undefined : stacktrace}
+        errorId={undefined}
+        onGoBack={undefined}
+        onReload={undefined}
       />
     ),
     simple: true,
@@ -250,7 +259,13 @@ export const ApiProvider = forwardRef<ApiContextType, PropsWithChildren<any>>(({
           const isShutdown = await handleError(result, displayErrorToast, contextValue.showGlobalError);
           apiLocked = apiLocked || isShutdown;
 
-          return null;
+          // Important: throw to let callers (e.g. React Query) treat this as an error
+          // Returning null marks the request as success with null data, causing runtime errors like 'results is null'
+          const err = new Error(
+            `${result.$meta?.status ?? ''} ${result.response?.detail ?? result.error ?? 'Request failed'}`.trim(),
+          ) as Error & { api?: ApiResponse };
+          err.api = result;
+          throw err;
         }
       }
 

@@ -3,6 +3,8 @@
 import logging
 import os
 import pathlib
+import json
+import requests
 
 import drf_yasg.openapi as openapi
 from core.filters import ListFilter
@@ -181,8 +183,8 @@ _project_schema = openapi.Schema(
 
 
 class ProjectListPagination(PageNumberPagination):
-    page_size = 30
-    page_size_query_param = 'page_size'
+    page_size = 2
+    page_size_query_param = page_size
 
 
 class ProjectFilterSet(FilterSet):
@@ -253,6 +255,37 @@ class ProjectListAPI(generics.ListCreateAPIView):
         serializer.is_valid(raise_exception=True)
         fields = serializer.validated_data.get('include')
         filter = serializer.validated_data.get('filter')
+
+        # OPA check similar to opaview/middleware.py
+        user = getattr(self.request, 'user', None)
+        if not user or not user.is_authenticated:
+            return Project.objects.none()
+
+        opa_url = getattr(settings, 'OPA_URL', 'http://0.0.0.0:8181/v1/data/organization/rbac/allow')
+        username = getattr(user, 'email', None) or getattr(user, 'username', '')
+        opa_payload = {
+            "input": {
+                "user": username,
+                "action": "annotate_task",
+                "resource": {
+                    "project_id": "project_A"
+                },  # do not change this, hardcoded for now
+            }
+        }
+        try:
+            logging.getLogger(__name__).debug(
+                "OPA request -> URL: %s, Payload: %s", opa_url, json.dumps(opa_payload)
+            )
+            response = requests.post(opa_url, json=opa_payload)
+            logging.getLogger(__name__).debug("OPA response status: %s", response.status_code)
+            response.raise_for_status()
+            opa_result = response.json()
+            if not opa_result.get('result', False):
+                return Project.objects.none()
+        except requests.RequestException as e:
+            logging.getLogger(__name__).error("Error communicating with OPA: %s", str(e))
+            return Project.objects.none()
+
         projects = Project.objects.filter(organization=self.request.user.active_organization).order_by(
             F('pinned_at').desc(nulls_last=True), '-created_at'
         )
