@@ -120,7 +120,7 @@ export const HomePage: Page = () => {
               </div>
             ) : isError ? (
               <div className="h-64 flex justify-center items-center">can't load projects</div>
-            ) : isSuccess && data.results.length === 0 ? (
+            ) : isSuccess && data?.results?.length === 0 ? (
               <div className="flex flex-col justify-center items-center border border-primary-border-subtle bg-primary-emphasis-subtle rounded-lg h-64">
                 <div
                   className={
@@ -135,7 +135,7 @@ export const HomePage: Page = () => {
                   Create Project
                 </Button>
               </div>
-            ) : isSuccess && data.results.length > 0 ? (
+            ) : isSuccess && data?.results && data.results.length > 0 ? (
               <div className="flex flex-col gap-1">
                 {data.results.map((project) => {
                   return <ProjectSimpleCard key={project.id} project={project} />;
