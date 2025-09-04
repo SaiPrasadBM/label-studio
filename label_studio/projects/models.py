@@ -83,7 +83,13 @@ class ProjectManager(models.Manager):
     }
 
     def for_user(self, user):
-        return self.filter(organization=user.active_organization)
+        from core.opa_integration import filter_queryset_by_user_projects
+        
+        # First filter by organization as before
+        queryset = self.filter(organization=user.active_organization)
+        
+        # Then apply OPA-based project filtering
+        return filter_queryset_by_user_projects(queryset, user)
 
     def with_counts(self, fields=None):
         return self.with_counts_annotate(self, fields=fields)

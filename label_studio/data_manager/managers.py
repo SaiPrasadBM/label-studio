@@ -744,8 +744,15 @@ class PreparedTaskManager(models.Manager):
         )
 
     def only_filtered(self, prepare_params=None):
+        from core.opa_integration import filter_queryset_by_user_projects
+        
         request = prepare_params.request
         queryset = TaskQuerySet(self.model).filter(project=prepare_params.project)
+        
+        # Apply OPA-based project filtering if user is available in request
+        if hasattr(request, 'user') and request.user.is_authenticated:
+            queryset = filter_queryset_by_user_projects(queryset, request.user, project_field='project_id')
+        
         fields_for_filter_ordering = get_fields_for_filter_ordering(prepare_params)
         queryset = self.annotate_queryset(queryset, fields_for_evaluation=fields_for_filter_ordering, request=request)
         return queryset.prepared(prepare_params=prepare_params)
@@ -753,4 +760,10 @@ class PreparedTaskManager(models.Manager):
 
 class TaskManager(models.Manager):
     def for_user(self, user):
-        return self.filter(project__organization=user.active_organization)
+        from core.opa_integration import filter_queryset_by_user_projects
+        
+        # First filter by organization as before
+        queryset = self.filter(project__organization=user.active_organization)
+        
+        # Then apply OPA-based project filtering
+        return filter_queryset_by_user_projects(queryset, user, project_field='project_id')
