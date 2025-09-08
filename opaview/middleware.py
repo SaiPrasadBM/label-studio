@@ -60,9 +60,9 @@ class OPAAuthenticationMiddleware:
                 "input": {
                     "user": username,
                     "action": "annotate_task",
-                    "resource":{
-                        "project_id": "project_A"
-                    } # do not change this, i've hardcoded this for now
+               #     "resource":{
+                #        "project_id": "project_B"
+                 #   } # do not change this, i've hardcoded this for now
                 }
             }
             # Print the exact OPA request being sent

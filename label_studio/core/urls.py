@@ -111,6 +111,7 @@ urlpatterns = [
     path('__lsa/', views.collect_metrics, name='collect_metrics'),
     re_path(r'^api-auth/', include('rest_framework.urls', namespace='rest_framework')),
     re_path(r'^', include('jwt_auth.urls')),
+    re_path(r'^', include('core.opa_urls')),
     re_path(r'^opaview/', include('opaview.urls')),
 ]
 

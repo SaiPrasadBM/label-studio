@@ -183,7 +183,7 @@ _project_schema = openapi.Schema(
 
 
 class ProjectListPagination(PageNumberPagination):
-    page_size = 2
+    page_size = 10
     page_size_query_param = page_size
 
 
@@ -256,41 +256,14 @@ class ProjectListAPI(generics.ListCreateAPIView):
         fields = serializer.validated_data.get('include')
         filter = serializer.validated_data.get('filter')
 
-        # OPA check similar to opaview/middleware.py
-        user = getattr(self.request, 'user', None)
-        if not user or not user.is_authenticated:
-            return Project.objects.none()
-
-        opa_url = getattr(settings, 'OPA_URL', 'http://0.0.0.0:8181/v1/data/organization/rbac/allow')
-        username = getattr(user, 'email', None) or getattr(user, 'username', '')
-        opa_payload = {
-            "input": {
-                "user": username,
-                "action": "annotate_task",
-                "resource": {
-                    "project_id": "project_A"
-                },  # do not change this, hardcoded for now
-            }
-        }
-        try:
-            logging.getLogger(__name__).debug(
-                "OPA request -> URL: %s, Payload: %s", opa_url, json.dumps(opa_payload)
-            )
-            response = requests.post(opa_url, json=opa_payload)
-            logging.getLogger(__name__).debug("OPA response status: %s", response.status_code)
-            response.raise_for_status()
-            opa_result = response.json()
-            if not opa_result.get('result', False):
-                return Project.objects.none()
-        except requests.RequestException as e:
-            logging.getLogger(__name__).error("Error communicating with OPA: %s", str(e))
-            return Project.objects.none()
-
-        projects = Project.objects.filter(organization=self.request.user.active_organization).order_by(
+        # Use ProjectManager.for_user() which includes OPA filtering
+        projects = Project.objects.for_user(self.request.user).order_by(
             F('pinned_at').desc(nulls_last=True), '-created_at'
         )
+        
         if filter in ['pinned_only', 'exclude_pinned']:
             projects = projects.filter(pinned_at__isnull=filter == 'exclude_pinned')
+            
         return ProjectManager.with_counts_annotate(projects, fields=fields).prefetch_related('members', 'created_by')
 
     def get_serializer_context(self):
@@ -343,7 +316,10 @@ class ProjectCountsListAPI(generics.ListAPIView):
         serializer = GetFieldsSerializer(data=self.request.query_params)
         serializer.is_valid(raise_exception=True)
         fields = serializer.validated_data.get('include')
-        return Project.objects.with_counts(fields=fields).filter(organization=self.request.user.active_organization)
+        
+        # Use ProjectManager.for_user() which includes OPA filtering
+        projects = Project.objects.for_user(self.request.user)
+        return ProjectManager.with_counts_annotate(projects, fields=fields)
 
 
 @method_decorator(
@@ -440,13 +416,11 @@ class ProjectCountsListAPI(generics.ListAPIView):
 )
 class ProjectAPI(generics.RetrieveUpdateDestroyAPIView):
     parser_classes = (JSONParser, FormParser, MultiPartParser)
-    queryset = Project.objects.with_counts()
     permission_required = ViewClassPermission(
         GET=all_permissions.projects_view,
         DELETE=all_permissions.projects_delete,
         PATCH=all_permissions.projects_change,
         PUT=all_permissions.projects_change,
-        POST=all_permissions.projects_create,
     )
     serializer_class = ProjectSerializer
 
@@ -457,7 +431,10 @@ class ProjectAPI(generics.RetrieveUpdateDestroyAPIView):
         serializer = GetFieldsSerializer(data=self.request.query_params)
         serializer.is_valid(raise_exception=True)
         fields = serializer.validated_data.get('include')
-        return Project.objects.with_counts(fields=fields).filter(organization=self.request.user.active_organization)
+        
+        # Use ProjectManager.for_user() which includes OPA filtering
+        projects = Project.objects.for_user(self.request.user)
+        return ProjectManager.with_counts_annotate(projects, fields=fields)
 
     def get(self, request, *args, **kwargs):
         return super(ProjectAPI, self).get(request, *args, **kwargs)
@@ -511,8 +488,10 @@ class ProjectAPI(generics.RetrieveUpdateDestroyAPIView):
 class ProjectNextTaskAPI(generics.RetrieveAPIView):
     permission_required = all_permissions.tasks_view
     serializer_class = TaskWithAnnotationsAndPredictionsAndDraftsSerializer  # using it for swagger API docs
-    queryset = Project.objects.all()
     swagger_schema = None  # this endpoint doesn't need to be in swagger API docs
+    
+    def get_queryset(self):
+        return Project.objects.for_user(self.request.user)
 
     def get(self, request, *args, **kwargs):
         project = self.get_object()
@@ -538,8 +517,10 @@ class ProjectNextTaskAPI(generics.RetrieveAPIView):
 
 class LabelStreamHistoryAPI(generics.RetrieveAPIView):
     permission_required = all_permissions.tasks_view
-    queryset = Project.objects.all()
     swagger_schema = None  # this endpoint doesn't need to be in swagger API docs
+    
+    def get_queryset(self):
+        return Project.objects.for_user(self.request.user)
 
     def get(self, request, *args, **kwargs):
         project = self.get_object()
@@ -610,7 +591,9 @@ class ProjectLabelConfigValidateAPI(generics.RetrieveAPIView):
     parser_classes = (JSONParser, FormParser, MultiPartParser)
     serializer_class = ProjectLabelConfigSerializer
     permission_required = all_permissions.projects_change
-    queryset = Project.objects.all()
+    
+    def get_queryset(self):
+        return Project.objects.for_user(self.request.user)
 
     def post(self, request, *args, **kwargs):
         project = self.get_object()
@@ -767,12 +750,14 @@ class ProjectReimportAPI(generics.RetrieveAPIView):
 class ProjectTaskListAPI(GetParentObjectMixin, generics.ListCreateAPIView, generics.DestroyAPIView):
     parser_classes = (JSONParser, FormParser)
     queryset = Task.objects.all()
-    parent_queryset = Project.objects.all()
     permission_required = ViewClassPermission(
         GET=all_permissions.tasks_view,
         POST=all_permissions.tasks_change,
         DELETE=all_permissions.tasks_delete,
     )
+    
+    def get_parent_queryset(self):
+        return Project.objects.for_user(self.request.user)
     serializer_class = TaskSerializer
     redirect_route = 'projects:project-settings'
     redirect_kwarg = 'pk'
@@ -855,10 +840,12 @@ class TemplateListAPI(generics.ListAPIView):
 
 class ProjectSampleTask(generics.RetrieveAPIView):
     parser_classes = (JSONParser,)
-    queryset = Project.objects.all()
     permission_required = all_permissions.projects_view
     serializer_class = ProjectSerializer
     swagger_schema = None
+    
+    def get_queryset(self):
+        return Project.objects.for_user(self.request.user)
 
     def post(self, request, *args, **kwargs):
         label_config = self.request.data.get('label_config')
@@ -893,7 +880,9 @@ class ProjectModelVersions(generics.RetrieveAPIView):
     parser_classes = (JSONParser,)
     swagger_schema = None
     permission_required = all_permissions.projects_view
-    queryset = Project.objects.all()
+    
+    def get_queryset(self):
+        return Project.objects.for_user(self.request.user)
 
     def get(self, request, *args, **kwargs):
         # TODO make sure "extended" is the right word and is

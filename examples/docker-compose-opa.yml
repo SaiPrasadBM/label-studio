@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  # OPA Server
+  opa:
+    image: openpolicyagent/opa:latest-envoy
+    ports:
+      - "8181:8181"
+    command:
+      - "run"
+      - "--server"
+      - "--addr=0.0.0.0:8181"
+      - "--log-level=debug"
+      - "/policies"
+    volumes:
+      - ./opa-policy.rego:/policies/policy.rego:ro
+      - ./opa-data.json:/policies/data.json:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8181/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - label-studio-network
+
+  # Label Studio (example configuration)
+  label-studio:
+    image: heartexlabs/label-studio:latest
+    ports:
+      - "8080:8080"
+    environment:
+      - LABEL_STUDIO_HOST=http://localhost:8080
+      - OPA_URL=http://opa:8181
+      - OPA_TIMEOUT=5
+      - OPA_CACHE_TIMEOUT=300
+    depends_on:
+      opa:
+        condition: service_healthy
+    networks:
+      - label-studio-network
+    volumes:
+      - label-studio-data:/label-studio/data
+
+  # Redis for caching (optional but recommended for production)
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - label-studio-network
+    volumes:
+      - redis-data:/data
+
+networks:
+  label-studio-network:
+    driver: bridge
+
+volumes:
+  label-studio-data:
+  redis-data:

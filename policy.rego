@@ -11,7 +11,8 @@ user_org_roles := {
     "user_frank": "Reviewer",
     "user_grace": "Annotator",
     "user_heidi": "Annotator",
-    "testing@example.com": "Annotator"
+    "testing@example.com": "Annotator",
+    "hellf0rg0d@proton.me": "Annotator"
 }
 
 resource_assignments := {
@@ -34,6 +35,9 @@ resource_assignments := {
     },
     "testing@example.com": {
         "projects": ["project_A", "project_B", "project_C"]
+    },
+    "hellf0rg0d@proton.me": {
+        "projects": ["project_B"]
     }
 }
 
